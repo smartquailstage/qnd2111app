@@ -1,0 +1,74 @@
+name: SmartQuail Django-app & Postgres Test qnd2111app
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  app_test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    env:
+      DJANGO_SECRET_KEY: test-key-not-good
+      NAME_DB: QND2111APP_STDB
+      PASSWORD_DB: Support1719@
+      USER_DB: sqadmindb
+      HOST_DB: localhost
+      PORT_DB: 5432 
+      DB_IGNORE_SSL: "true"
+      EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
+      EMAIL_HOST: localhost
+      EMAIL_PORT: 587
+      EMAIL_HOST_USER: ''
+      EMAIL_HOST_PASSWORD: ''
+      EMAIL_USE_TLS: 'True'
+      EMAIL_USE_SSL: 'False'
+
+    services:
+      smartquaildb:
+        image: postgres:16-alpine
+        env: 
+          POSTGRES_DB: QND2111APP_STDB
+          POSTGRES_PASSWORD: Support1719@
+          POSTGRES_USER: sqadmindb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    strategy:
+      max-parallel: 4
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install "Django>=5.1,<5.2" gunicorn python-decouple
+          if [ -f "pks/sba.txt" ]; then
+            python3 -m pip install -r pks/sba.txt
+          elif [ -f "pk.txt" ]; then
+            python3 -m pip install -r pk.txt
+          fi
+
+      - name: Start Gunicorn server check
+        run: |
+          gunicorn qnd2111app.wsgi:application --bind 0.0.0.0:8000 --workers 2 &
+          sleep 5
+
+      - name: Run Tests with Django
+        run: |
+          python3 manage.py test --settings=qnd2111app.settings.prod
